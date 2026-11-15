@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#38bdf8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <title>Treino de Cálculo Mental</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --accent: #38bdf8;
+      --accent-2: #22c55e;
+      --danger: #ef4444;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .app {
+      width: 100%;
+      max-width: 640px;
+      background: var(--panel);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    }
+    h1 { margin: 0 0 4px; font-size: 1.6rem; }
+    .subtitle { color: var(--muted); margin: 0 0 20px; }
+    .section { margin-bottom: 20px; }
+    .section-title { font-size: 0.85rem; text-transform: uppercase; color: var(--muted); letter-spacing: 1px; margin-bottom: 8px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    button.chip {
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all .15s;
+    }
+    button.chip.active { background: var(--accent); border-color: var(--accent); color: #0f172a; font-weight: 600; }
+    button.chip:hover { border-color: var(--accent); }
+    .game {
+      text-align: center;
+      padding: 24px 0;
+    }
+    .operation { font-size: 2.6rem; font-weight: 700; margin: 12px 0 20px; letter-spacing: 2px; }
+    .answer-row { display: flex; gap: 8px; justify-content: center; }
+    input.answer {
+      font-size: 1.4rem;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: var(--text);
+      width: 180px;
+      text-align: center;
+      -moz-appearance: textfield;
+    }
+    input.answer::-webkit-outer-spin-button,
+    input.answer::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    button.primary {
+      background: var(--accent);
+      color: #0f172a;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    button.primary:hover { filter: brightness(1.1); }
+    .feedback { margin-top: 12px; min-height: 24px; font-weight: 600; }
+    .feedback.ok { color: var(--accent-2); animation: pop .35s ease; }
+    .feedback.err { color: var(--danger); animation: shake .35s ease; }
+    @keyframes pop { 0% { transform: scale(.9); opacity:.6; } 100% { transform: scale(1); opacity:1; } }
+    @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .stat { background: #0f172a; border-radius: 10px; padding: 12px; text-align: center; }
+    .stat .value { font-size: 1.6rem; font-weight: 700; }
+    .stat .label { color: var(--muted); font-size: 0.8rem; }
+    .history { max-height: 160px; overflow: auto; font-size: 0.85rem; }
+    .history li { padding: 4px 0; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; }
+    .history .ok { color: var(--accent-2); }
+    .history .err { color: var(--danger); }
+    .controls { display: flex; gap: 8px; justify-content: center; margin-top: 16px; }
+    details.advanced { margin-bottom: 20px; border: 1px solid #334155; border-radius: 10px; padding: 8px 12px; }
+    details.advanced summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
+    button.ghost { background: transparent; border: 1px solid #334155; color: var(--text); padding: 8px 14px; border-radius: 10px; cursor: pointer; }
+    @media (max-width: 480px) {
+      .operation { font-size: 2rem; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .chip { font-size: 0.8rem; padding: 6px 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="app">
+    <h1>Treino de Cálculo Mental</h1>
+    <p class="subtitle">Pratique operações matemáticas e acompanhe seu desempenho.</p>
+    <button v-if="canInstall" class="ghost" style="margin-bottom:12px;" @click="installApp">Instalar aplicativo</button>
+
+    <div class="section">
+      <div class="section-title">Operação</div>
+      <div class="row">
+        <button v-for="op in operations.slice(0,4)" :key="op.value" class="chip" :class="{active: config.op === op.value}" @click="config.op = op.value" :disabled="levelMode==='auto'">{{ op.label }}</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Quantidade de dígitos (por operando)</div>
+      <select v-model.number="config.digits" :disabled="levelMode==='auto'" style="padding:8px; border-radius:8px; background:#0f172a; color:var(--text); border:1px solid #334155;">
+        <option v-for="d in [1,2,3,4]" :key="d" :value="d">{{ d }} dígito{{ d>1?'s':'' }}</option>
+      </select>
+    </div>
+
+    <details class="advanced" :open="advancedOpen" @toggle="advancedOpen = $event.target.open">
+      <summary>⚙️ Configurações avançadas</summary>
+
+      <div class="section">
+        <div class="section-title">Mais operações</div>
+        <div class="row">
+          <button v-for="op in operations.slice(4)" :key="op.value" class="chip" :class="{active: config.op === op.value}" @click="config.op = op.value" :disabled="levelMode==='auto'">{{ op.label }}</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Modo de jogo</div>
+        <select v-model="gameMode" style="padding:8px; border-radius:8px; background:#0f172a; color:var(--text); border:1px solid #334155;">
+          <option value="free">Livre</option>
+          <option value="lives">Desafio por vidas (3)</option>
+          <option value="time">Desafio por tempo</option>
+        </select>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Modo de dificuldade</div>
+        <div class="row">
+          <button class="chip" :class="{active: levelMode === 'manual'}" @click="levelMode = 'manual'">Manual</button>
+          <button class="chip" :class="{active: levelMode === 'auto'}" @click="levelMode = 'auto'">Automático (progressão)</button>
+        </div>
+        <div v-if="levelMode === 'auto'" style="margin-top:8px; color:var(--muted); font-size:0.9rem;">
+          Nível {{ level }}/{{ maxLevel }} · acertos {{ correctStreak }}/3 · erros {{ wrongStreak }}/2
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Quantidade de operandos</div>
+        <select v-model.number="config.operands" :disabled="levelMode==='auto'" style="padding:8px; border-radius:8px; background:#0f172a; color:var(--text); border:1px solid #334155;">
+          <option v-for="n in [2,3,4]" :key="n" :value="n">{{ n }}</option>
+        </select>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Tempo por operação (segundos)</div>
+        <select v-model.number="config.timePerOp" style="padding:8px; border-radius:8px; background:#0f172a; color:var(--text); border:1px solid #334155;">
+          <option v-for="t in [0,5,10,15,30]" :key="t" :value="t">{{ t === 0 ? 'Desligado' : t + 's' }}</option>
+        </select>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Tempo de sessão (segundos)</div>
+        <select v-model.number="config.sessionTime" style="padding:8px; border-radius:8px; background:#0f172a; color:var(--text); border:1px solid #334155;">
+          <option v-for="t in [0,60,120,300]" :key="t" :value="t">{{ t === 0 ? 'Desligado' : t + 's' }}</option>
+        </select>
+      </div>
+    </details>
+
+    <div class="game">
+      <div class="timers" style="display:flex; gap:16px; justify-content:center; margin-bottom:8px; color:var(--muted); font-size:0.9rem; flex-wrap:wrap;">
+        <span v-if="levelMode === 'auto'" style="background:#334155; padding:2px 8px; border-radius:999px; color:var(--accent);">Nível {{ level }}</span>
+        <span v-if="gameMode === 'lives'">Vidas: {{ lives }}/{{ maxLives }}</span>
+        <span v-if="config.timePerOp > 0">Operação: {{ opTimer }}s</span>
+        <span v-if="config.sessionTime > 0">Sessão: {{ sessionTimer }}s</span>
+        <span>Pontos: {{ score }}</span>
+      </div>
+      <div class="operation" v-if="current && !gameOver">{{ current.expr }} = ?</div>
+      <div class="operation" v-else-if="gameOver">Sessão encerrada</div>
+      <div class="operation" v-else>Pressione "Nova operação"</div>
+      <div class="answer-row" v-if="!gameOver">
+        <input class="answer" type="number" v-model="answer" @keyup.enter="check" @input="onInput" :disabled="!current || processing || paused" ref="answerInput" />
+        <button class="primary" @click="check" :disabled="!current || processing || paused">Verificar</button>
+      </div>
+      <div class="feedback" :class="feedbackType">{{ feedback }}</div>
+      <div class="controls">
+        <button class="ghost" @click="togglePause" :disabled="gameOver || !sessionStarted && config.sessionTime===0 && config.timePerOp===0">{{ paused ? 'Retomar' : 'Pausar' }}</button>
+        <button class="ghost" @click="newOperation" :disabled="gameOver || paused">Nova operação</button>
+        <button class="ghost" @click="resetStats">Nova sessão</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Estatísticas</div>
+      <div class="stats">
+        <div class="stat"><div class="value">{{ stats.total }}</div><div class="label">Total</div></div>
+        <div class="stat"><div class="value" style="color:var(--accent-2)">{{ stats.correct }}</div><div class="label">Acertos</div></div>
+        <div class="stat"><div class="value" style="color:var(--danger)">{{ stats.wrong }}</div><div class="label">Erros</div></div>
+        <div class="stat"><div class="value" style="color:var(--accent)">{{ score }}</div><div class="label">Pontos</div></div>
+      </div>
+      <div style="text-align:center; margin-top:8px; color:var(--muted);">Aproveitamento: {{ accuracy }}%</div>
+      <div style="text-align:center; margin-top:4px; color:var(--accent);">Melhor pontuação: {{ bestScore }}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Estatísticas avançadas</div>
+      <div style="color:var(--muted); font-size:0.9rem; margin-bottom:8px;">Tempo médio por operação: {{ avgTimeMs }} ms</div>
+      <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
+        <thead>
+          <tr style="color:var(--muted); text-align:left;">
+            <th>Operação</th><th>Tentativas</th><th>Acertos</th><th>%</th><th>Tempo médio (ms)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="s in opStatsList" :key="s.key">
+            <td>{{ s.label }}</td>
+            <td>{{ s.total }}</td>
+            <td>{{ s.correct }}</td>
+            <td>{{ s.accuracy }}</td>
+            <td>{{ s.avg }}</td>
+          </tr>
+          <tr v-if="!opStatsList.length">
+            <td colspan="5" style="color:var(--muted);">Sem dados ainda.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Histórico de sessões</div>
+      <ul class="history">
+        <li v-for="(s, i) in sessions" :key="i">
+          <span>{{ s.date }} · {{ s.total }} op · {{ s.correct }}✓ {{ s.wrong }}✗ · {{ s.accuracy }}% · {{ s.score }} pts</span>
+        </li>
+        <li v-if="!sessions.length" style="color:var(--muted);">Nenhuma sessão registrada.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+    createApp({
+      data() {
+        return {
+          operations: [
+            { label: 'Soma', value: 'add' },
+            { label: 'Subtração', value: 'sub' },
+            { label: 'Multiplicação', value: 'mul' },
+            { label: 'Divisão', value: 'div' },
+            { label: 'Potência', value: 'pow' },
+            { label: 'Raiz quadrada', value: 'sqrt' },
+            { label: 'Porcentagem', value: 'pct' },
+            { label: 'Frações', value: 'frac' },
+            { label: 'Misto', value: 'mix' },
+          ],
+          config: { op: 'add', digits: 2, operands: 2, timePerOp: 0, sessionTime: 0 },
+          gameMode: 'free',
+          lives: 3,
+          maxLives: 3,
+          levelMode: 'manual',
+          level: 1,
+          maxLevel: 6,
+          correctStreak: 0,
+          wrongStreak: 0,
+          ignoreConfigWatch: false,
+          current: null,
+          answer: '',
+          feedback: '',
+          feedbackType: '',
+          processing: false,
+          stats: { total: 0, correct: 0, wrong: 0 },
+          score: 0,
+          bestScore: 0,
+          sessions: [],
+          opStats: {},
+          opStartTime: 0,
+          totalTimeMs: 0,
+          totalOpsTimed: 0,
+          opTimer: 0,
+          sessionTimer: 0,
+          gameOver: false,
+          paused: false,
+          advancedOpen: false,
+          canInstall: false,
+          deferredPrompt: null,
+          sessionStarted: false,
+          _opInterval: null,
+          _sessionInterval: null,
+        };
+      },
+      computed: {
+        accuracy() {
+          if (this.stats.total === 0) return 0;
+          return Math.round((this.stats.correct / this.stats.total) * 100);
+        },
+        avgTimeMs() {
+          if (this.totalOpsTimed === 0) return 0;
+          return Math.round(this.totalTimeMs / this.totalOpsTimed);
+        },
+        opStatsList() {
+          const labels = { add:'Soma', sub:'Subtração', mul:'Multiplicação', div:'Divisão', pow:'Potência', sqrt:'Raiz', pct:'Porcentagem', frac:'Frações' };
+          return Object.keys(this.opStats).map(k => {
+            const s = this.opStats[k];
+            return {
+              key: k,
+              label: labels[k] || k,
+              total: s.total,
+              correct: s.correct,
+              accuracy: s.total ? Math.round(s.correct / s.total * 100) : 0,
+              avg: s.total ? Math.round(s.timeMs / s.total) : 0
+            };
+          });
+        }
+      },
+      mounted() {
+        const saved = localStorage.getItem('calc-trainer');
+        if (saved) {
+          try {
+            const d = JSON.parse(saved);
+            this.stats = d.stats || this.stats;
+            this.config = d.config || this.config;
+            this.score = d.score || 0;
+            this.levelMode = d.levelMode || 'manual';
+            this.level = d.level || 1;
+            this.gameMode = d.gameMode || 'free';
+            this.opStats = d.opStats || {};
+            if (this.levelMode === 'auto') this.applyLevel();
+            const sess = localStorage.getItem('calc-trainer-sessions');
+            if (sess) {
+              try {
+                const s = JSON.parse(sess);
+                this.sessions = s.sessions || [];
+                this.bestScore = s.bestScore || 0;
+              } catch (e) {}
+            }
+            window.addEventListener('beforeinstallprompt', (e) => {
+              e.preventDefault();
+              this.deferredPrompt = e;
+              this.canInstall = true;
+            });
+            window.addEventListener('appinstalled', () => {
+              this.canInstall = false;
+              this.deferredPrompt = null;
+            });
+          } catch (e) {}
+        }
+        this.newOperation();
+        if (window.location.search.includes('test=1')) {
+          setTimeout(() => this.runSelfTests(), 300);
+        }
+      },
+      watch: {
+        stats: { deep: true, handler() { this.persist(); } },
+        score: { handler() { this.persist(); } },
+        level: { handler() { this.persist(); } },
+        gameMode: {
+          handler(newVal) {
+            this.persist();
+            if (newVal === 'time' && this.config.sessionTime === 0) {
+              this.config.sessionTime = 60;
+            }
+            this.lives = this.maxLives;
+            this.clearTimers();
+            this.sessionStarted = false;
+            this.gameOver = false;
+            this.paused = false;
+            this.newOperation();
+          }
+        },
+        levelMode: {
+          handler(newVal) {
+            this.persist();
+            this.clearTimers();
+            this.sessionStarted = false;
+            this.gameOver = false;
+            this.paused = false;
+            this.correctStreak = 0;
+            this.wrongStreak = 0;
+            if (newVal === 'auto') {
+              this.level = 1;
+              this.applyLevel();
+            }
+            this.newOperation();
+          }
+        },
+        config: { deep: true, handler() { if (this.ignoreConfigWatch) { this.persist(); return; } this.persist(); this.clearTimers(); this.sessionStarted = false; this.gameOver = false; this.paused = false; this.newOperation(); } },
+      },
+      methods: {
+        persist() {
+          localStorage.setItem('calc-trainer', JSON.stringify({
+            stats: this.stats, config: this.config, score: this.score,
+            levelMode: this.levelMode, level: this.level,
+            gameMode: this.gameMode, opStats: this.opStats
+          }));
+        },
+        rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; },
+        randOperand() {
+          const min = Math.pow(10, this.config.digits - 1);
+          const max = Math.pow(10, this.config.digits) - 1;
+          return this.rand(min, max);
+        },
+        levelParams(level) {
+          const table = [
+            { digits: 1, operands: 2, op: 'add' },
+            { digits: 1, operands: 2, op: 'mix' },
+            { digits: 2, operands: 2, op: 'add' },
+            { digits: 2, operands: 2, op: 'mix' },
+            { digits: 2, operands: 3, op: 'mix' },
+            { digits: 3, operands: 2, op: 'mix' },
+          ];
+          return table[Math.min(level, table.length) - 1] || table[0];
+        },
+        applyLevel() {
+          this.ignoreConfigWatch = true;
+          const p = this.levelParams(this.level);
+          this.config.digits = p.digits;
+          this.config.operands = p.operands;
+          this.config.op = p.op;
+          this.$nextTick(() => { this.ignoreConfigWatch = false; });
+        },
+        pickOp() {
+          if (this.config.op !== 'mix') return this.config.op;
+          const ops = ['add','sub','mul','div','pow','sqrt','pct','frac'];
+          return ops[this.rand(0, ops.length - 1)];
+        },
+        clearOpTimer() {
+          if (this._opInterval) { clearInterval(this._opInterval); this._opInterval = null; }
+        },
+        clearSessionTimer() {
+          if (this._sessionInterval) { clearInterval(this._sessionInterval); this._sessionInterval = null; }
+        },
+        clearTimers() {
+          this.clearOpTimer();
+          this.clearSessionTimer();
+        },
+        playSound(type) {
+          try {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return;
+            const ctx = new Ctx();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = type === 'ok' ? 880 : 220;
+            gain.gain.value = 0.08;
+            osc.start();
+            osc.stop(ctx.currentTime + 0.12);
+          } catch (e) {}
+        },
+        recordSession() {
+          if (this.stats.total === 0) return;
+          const acc = this.stats.total ? Math.round((this.stats.correct / this.stats.total) * 100) : 0;
+          const entry = {
+            date: new Date().toLocaleString('pt-BR'),
+            score: this.score,
+            total: this.stats.total,
+            correct: this.stats.correct,
+            wrong: this.stats.wrong,
+            accuracy: acc,
+            level: this.levelMode === 'auto' ? this.level : null
+          };
+          this.sessions.unshift(entry);
+          if (this.sessions.length > 10) this.sessions.pop();
+          if (this.score > this.bestScore) this.bestScore = this.score;
+          localStorage.setItem('calc-trainer-sessions', JSON.stringify({ sessions: this.sessions, bestScore: this.bestScore }));
+        },
+        onInput() {
+          if (this.processing || !this.current || this.gameOver || this.paused) return;
+          if (this.answer === '' || this.answer === null) return;
+          if (Number(this.answer) === this.current.result) {
+            this.check();
+          }
+        },
+        handleTimeout() {
+          if (this.processing || !this.current || this.gameOver || this.paused) return;
+          this.processing = true;
+          this.clearOpTimer();
+          this.stats.total++;
+          this.stats.wrong++;
+          this.playSound('err');
+          const opKey = this.current.op;
+          if (!this.opStats[opKey]) this.opStats[opKey] = { total: 0, correct: 0, timeMs: 0 };
+          this.opStats[opKey].total++;
+          if (this.gameMode === 'lives') {
+            this.lives--;
+            if (this.lives <= 0) {
+              this.feedback = 'Sem vidas! Fim de jogo.';
+              this.feedbackType = 'err';
+              setTimeout(() => { this.processing = false; this.endSession(); }, 1200);
+              return;
+            }
+          }
+          this.feedback = `Tempo esgotado! Resposta: ${this.current.result}`;
+          this.feedbackType = 'err';
+          setTimeout(() => {
+            this.processing = false;
+            if (!this.gameOver) this.newOperation();
+          }, 1200);
+        },
+        endSession() {
+          this.recordSession();
+          this.gameOver = true;
+          this.clearTimers();
+          this.current = null;
+          this.feedback = `Sessão encerrada. Pontuação final: ${this.score}`;
+          this.feedbackType = '';
+        },
+        togglePause() {
+          if (this.gameOver) return;
+          if (this.paused) {
+            this.paused = false;
+            if (this.config.timePerOp > 0 && this.current && this.opTimer > 0) {
+              this._opInterval = setInterval(() => {
+                this.opTimer--;
+                if (this.opTimer <= 0) this.handleTimeout();
+              }, 1000);
+            }
+            if (this.config.sessionTime > 0 && this.sessionStarted && this.sessionTimer > 0) {
+              this._sessionInterval = setInterval(() => {
+                this.sessionTimer--;
+                if (this.sessionTimer <= 0) this.endSession();
+              }, 1000);
+            }
+            this.$nextTick(() => { if (this.$refs.answerInput) this.$refs.answerInput.focus(); });
+          } else {
+            this.paused = true;
+            this.clearOpTimer();
+            this.clearSessionTimer();
+          }
+        },
+        newOperation() {
+          if (this.gameOver) return;
+          this.clearOpTimer();
+          const op = this.pickOp();
+          const n = this.config.operands;
+          const nums = Array.from({ length: n }, () => this.randOperand());
+          let expr, result;
+          if (op === 'add') {
+            result = nums.reduce((a,b)=>a+b, 0);
+            expr = nums.join(' + ');
+          } else if (op === 'sub') {
+            // garantir resultado não negativo
+            const first = Math.max(...nums);
+            // remover uma ocorrência do maior
+            const idx = nums.indexOf(first);
+            const others = nums.filter((_, i) => i !== idx);
+            result = first - others.reduce((a,b)=>a+b, 0);
+            expr = first + ' - ' + others.join(' - ');
+          } else if (op === 'mul') {
+            result = nums.reduce((a,b)=>a*b, 1);
+            expr = nums.join(' × ');
+          } else if (op === 'div') {
+            // gerar divisão exata: a / b
+            const b = nums[1] || this.randOperand();
+            const q = nums[0];
+            const a = b * q;
+            result = q;
+            expr = `${a} ÷ ${b}`;
+          } else if (op === 'pow') {
+            const base = this.randOperand();
+            const exp = this.rand(2, 3);
+            result = Math.pow(base, exp);
+            expr = `${base}^${exp}`;
+          } else if (op === 'sqrt') {
+            const root = this.rand(2, Math.max(2, Math.pow(10, this.config.digits) - 1));
+            const n = root * root;
+            result = root;
+            expr = `√${n}`;
+          } else if (op === 'pct') {
+            const pcts = [10, 20, 25, 50];
+            const pct = pcts[this.rand(0, pcts.length - 1)];
+            let Y = this.randOperand();
+            let res = Y * pct / 100;
+            let attempts = 0;
+            while (!Number.isInteger(res) && attempts < 10) {
+              Y = this.randOperand();
+              res = Y * pct / 100;
+              attempts++;
+            }
+            if (!Number.isInteger(res)) { res = 0; Y = 0; }
+            result = res;
+            expr = `${pct}% de ${Y}`;
+          } else if (op === 'frac') {
+            const den = this.rand(2, 12);
+            const a = this.rand(1, den - 1);
+            const c = this.rand(1, den - 1);
+            result = a + c;
+            expr = `${a}/${den} + ${c}/${den} = ?/${den}`;
+          }
+          this.current = { expr, result, op };
+          this.answer = '';
+          this.feedback = '';
+          this.feedbackType = '';
+          // timer por operação
+          if (this.config.timePerOp > 0) {
+            this.opTimer = this.config.timePerOp;
+            this._opInterval = setInterval(() => {
+              this.opTimer--;
+              if (this.opTimer <= 0) {
+                this.handleTimeout();
+              }
+            }, 1000);
+          } else {
+            this.opTimer = 0;
+          }
+          // timer de sessão
+          if (this.config.sessionTime > 0 && !this.sessionStarted) {
+            this.sessionStarted = true;
+            this.sessionTimer = this.config.sessionTime;
+            this._sessionInterval = setInterval(() => {
+              this.sessionTimer--;
+              if (this.sessionTimer <= 0) {
+                this.endSession();
+              }
+            }, 1000);
+          }
+          this.opStartTime = Date.now();
+          this.$nextTick(() => { if (this.$refs.answerInput) this.$refs.answerInput.focus(); });
+        },
+        check() {
+          if (this.processing || !this.current || this.gameOver || this.paused) return;
+          this.clearOpTimer();
+          const val = Number(this.answer);
+          const ok = val === this.current.result;
+          this.processing = true;
+          this.stats.total++;
+          const elapsed = this.opStartTime ? Date.now() - this.opStartTime : 0;
+          if (elapsed > 0) { this.totalTimeMs += elapsed; this.totalOpsTimed++; }
+          const opKey = this.current.op;
+          if (!this.opStats[opKey]) this.opStats[opKey] = { total: 0, correct: 0, timeMs: 0 };
+          this.opStats[opKey].total++;
+          this.opStats[opKey].timeMs += elapsed;
+          if (ok) {
+            this.playSound('ok');
+            this.stats.correct++;
+            this.opStats[opKey].correct++;
+            const bonus = this.config.timePerOp > 0 ? this.opTimer * 2 : 5;
+            this.score += 10 + bonus;
+            this.feedback = 'Correto! 🎉';
+            this.feedbackType = 'ok';
+            if (this.levelMode === 'auto') {
+              this.correctStreak++;
+              this.wrongStreak = 0;
+              if (this.correctStreak >= 3 && this.level < this.maxLevel) {
+                this.level++;
+                this.correctStreak = 0;
+                this.applyLevel();
+                this.feedback = `Correto! 🎉 Subiu para o nível ${this.level}!`;
+              }
+            }
+          } else {
+            this.playSound('err');
+            this.stats.wrong++;
+            this.feedback = `Errado. Resposta correta: ${this.current.result}`;
+            this.feedbackType = 'err';
+            if (this.levelMode === 'auto') {
+              this.wrongStreak++;
+              this.correctStreak = 0;
+              if (this.wrongStreak >= 2 && this.level > 1) {
+                this.level--;
+                this.wrongStreak = 0;
+                this.applyLevel();
+                this.feedback = `Errado. Resposta: ${this.current.result}. Desceu para o nível ${this.level}.`;
+              }
+            }
+            if (this.gameMode === 'lives') {
+              this.lives--;
+              if (this.lives <= 0) {
+                this.feedback = 'Sem vidas! Fim de jogo.';
+              }
+            }
+          }
+          if (this.gameMode === 'lives' && !ok && this.lives <= 0) {
+            setTimeout(() => {
+              this.processing = false;
+              this.endSession();
+            }, 1200);
+          } else {
+            setTimeout(() => {
+              this.processing = false;
+              if (!this.gameOver) this.newOperation();
+            }, ok ? 500 : 1200);
+          }
+        },
+        resetStats() {
+          this.recordSession();
+          this.stats = { total: 0, correct: 0, wrong: 0 };
+          this.score = 0;
+          this.sessionStarted = false;
+          this.gameOver = false;
+          this.paused = false;
+          this.correctStreak = 0;
+          this.wrongStreak = 0;
+          this.lives = this.maxLives;
+          if (this.levelMode === 'auto') {
+            this.level = 1;
+            this.applyLevel();
+          }
+          this.clearTimers();
+          this.sessionTimer = 0;
+          this.opTimer = 0;
+          this.persist();
+          this.newOperation();
+        },
+        async installApp() {
+          if (!this.deferredPrompt) return;
+          this.deferredPrompt.prompt();
+          await this.deferredPrompt.userChoice;
+          this.deferredPrompt = null;
+          this.canInstall = false;
+        },
+        runSelfTests() {
+          const results = [];
+          const assert = (name, cond) => results.push({ name, ok: !!cond });
+          const ops = ['add','sub','mul','div','pow','sqrt','pct','frac'];
+          this.levelMode = 'manual';
+          this.config.digits = 2;
+          this.config.operands = 2;
+          for (const op of ops) {
+            this.config.op = op;
+            for (let i = 0; i < 5; i++) {
+              this.newOperation();
+              const c = this.current;
+              assert(`${op} gera operação`, !!c && typeof c.result === 'number' && !isNaN(c.result));
+            }
+          }
+          // teste de verificação
+          this.config.op = 'add';
+          this.newOperation();
+          const r = this.current.result;
+          this.answer = String(r);
+          const before = this.stats.total;
+          this.check();
+          assert('resposta correta incrementa acertos', this.stats.correct > 0);
+          const okCount = results.filter(r => r.ok).length;
+          console.table(results);
+          this.feedback = `Testes: ${okCount}/${results.length} OK`;
+          this.feedbackType = okCount === results.length ? 'ok' : 'err';
+        }
+      }
+    }).mount('#app');
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
